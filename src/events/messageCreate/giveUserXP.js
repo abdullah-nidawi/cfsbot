@@ -1,92 +1,54 @@
 const levelSchema = require("../../schemas/levelSchema");
 const Channels = require("../../schemas/channelSchema");
-const { x, y } = require("../../cfg.json");
-const client = require("../../index")
-const cooldowns = new Set();
+const { levelForXp } = require("../../utils/leveling");
 
-
-
-let levelXP = (lvl) => {
-    const r = Math.floor((lvl / x) ** y + 100);
-    return r;
-}
+const cooldowns = new Map();
+const COOLDOWN_MS = 60_000;
 const randomIntegerInRange = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-module.exports = async (message) => {
+module.exports = async (message, client) => {
+    if (!message.inGuild() || message.author.bot) return;
 
-    if (!message.inGuild() || message.author.bot || cooldowns.has(message.author.id)) return;
+    // Include the guild so activity in one server never blocks XP in another.
+    const cooldownKey = `${message.guild.id}:${message.author.id}`;
+    if (cooldowns.has(cooldownKey)) return;
 
-    const msgXp = randomIntegerInRange(15, 25);
-
-    const query = {
-        userId: message.author.id,
-        guildId: message.guild.id
-    };
+    const timer = setTimeout(() => cooldowns.delete(cooldownKey), COOLDOWN_MS);
+    timer.unref?.();
+    cooldowns.set(cooldownKey, timer);
 
     try {
+        const msgXp = randomIntegerInRange(15, 25);
+        const user = await levelSchema.findOneAndUpdate(
+            { userId: message.author.id, guildId: message.guild.id },
+            {
+                $set: { userName: message.author.username },
+                $inc: { xp: msgXp },
+                $setOnInsert: { level: 0 }
+            },
+            { new: true, upsert: true, setDefaultsOnInsert: true }
+        );
 
-        let usr = await levelSchema.findOne(query);
+        const nextLevel = levelForXp(user.xp);
+        if (nextLevel <= user.level) return;
 
-        let guildChannels = await Channels.findOne({
-            guildId: message.guild.id
+        user.level = nextLevel;
+        await user.save();
+
+        const guildChannels = await Channels.findOne({ guildId: message.guild.id });
+        if (!guildChannels?.rankId) return;
+
+        const levelChannel = await message.guild.channels.fetch(guildChannels.rankId).catch(() => null);
+        if (!levelChannel?.isTextBased()) return;
+
+        await levelChannel.send({
+            content: `Congrats <@${message.author.id}>! You advanced to **level ${user.level}** 🎉`,
+            allowedMentions: { users: [message.author.id] }
         });
-
-        if (!usr) {
-            usr = new levelSchema({
-                userId: message.author.id,
-                guildId: message.guild.id,
-                userName: message.author.username,
-                xp: msgXp
-            });
-
-            await usr.save();
-
-            cooldowns.add(message.author.id);
-            setTimeout(() => {
-                cooldowns.delete(message.author.id);
-            }, 60000);
-
-            return;
-
-        }
-
-        usr.xp += msgXp;
-
-        if (!guildChannels) {
-            await usr.save();
-            return;
-        }
-
-        let j = usr.level;
-        if (levelXP(usr.level) < usr.xp) {
-            do {
-                j++;
-            }
-            while (levelXP(j) < usr.xp);
-
-            usr.level = j;
-
-            client.channels.cache.get(guildChannels.rankId).send({
-                content: `Congrats <@${message.author.id}>! You advanced to **level ${usr.level}** 🎉`
-            })
-        }
-
-        // console.log(`usr.xp: ${usr.xp}`);
-        // console.log(`usr.level: ${usr.level}`);
-        // console.log(`next level: ${levelXP(usr.level) - usr.xp}`);
-
-
-        await usr.save();
-
-        cooldowns.add(message.author.id);
-        setTimeout(() => {
-            cooldowns.delete(message.author.id);
-        }, 60000);
-
+    } catch (error) {
+        clearTimeout(timer);
+        cooldowns.delete(cooldownKey);
+        console.error("Error giving message XP:", error);
     }
-    catch (err) {
-        console.log(`Error giving message XP to member ${err}`)
-    }
-
-}
+};
 

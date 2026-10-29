@@ -1,39 +1,42 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 const Level = require("../../schemas/levelSchema");
 
 
 module.exports = {
-
-    // deleted: true,
-
     data: new SlashCommandBuilder()
         .setName("resetxp")
-        .setDescription("Resets a member's xp to 0")
+        .setDescription("Reset a member's XP and level")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
         .addUserOption((option) =>
             option
                 .setName("user")
                 .setDescription("who do you wanna reset?")
                 .setRequired(true)),
 
-    run: async ({ interaction, client }) => {
-        await interaction.deferReply();
-        const member = interaction.options.getUser("user");
+    run: async ({ interaction }) => {
+        await interaction.deferReply({ ephemeral: true });
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+            await interaction.editReply({ content: "You need Manage Server permission to reset XP." });
+            return;
+        }
+
+        const member = interaction.options.getUser("user", true);
 
         if (member.bot) {
-            interaction.editReply({
+            await interaction.editReply({
                 content: `Can't use this command on bots 💀.`
             });
 
             return;
         }
 
-        let user = await Level.findOne({
+        const user = await Level.findOne({
             userId: member.id,
             guildId: interaction.guild.id
         });
 
-        if (!user || user.xp == 0) {
-            interaction.editReply({
+        if (!user || user.xp === 0) {
+            await interaction.editReply({
                 content: `Nah chill 💀.`
             });
 
@@ -42,13 +45,11 @@ module.exports = {
 
         user.xp = 0;
         user.level = 0;
-        user.save();
-        interaction.editReply({
-            content: `<@${member.id}> Your rank has been reset 💀.`
+        await user.save();
+        await interaction.editReply({
+            content: `${member.username}'s rank has been reset 💀.`
         });
     },
-
-    devOnly: true,
 
     inGuild: true
 };

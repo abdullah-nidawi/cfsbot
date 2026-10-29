@@ -1,25 +1,22 @@
 const Channels = require("../schemas/channelSchema");
 
-module.exports = async (interaction, commandObj, handler, client) => {
-    if (commandObj.name === "rank" || commandObj.name === "givexp" || commandObj.name === "leaderboard") {
+module.exports = async (interaction, commandObj) => {
+    if (!interaction.inGuild() || !["rank", "givexp", "leaderboard"].includes(commandObj.name)) return false;
 
-        let guildChannels = await Channels.findOne({
-            guildId: interaction.guild.id
-        });
-
+    try {
+        const guildChannels = await Channels.findOne({ guildId: interaction.guild.id });
         if (!guildChannels) {
-            interaction.reply({
-                content: `Use /setup-channels first to assign a channel for this command.`,
-            });
+            await interaction.reply({ content: "Use /setup-channels first to assign a channel for this command.", ephemeral: true });
             return true;
         }
-        else if (interaction.channelId != guildChannels.rankId) {
-            interaction.reply({
-                content: `This command is only available in <#${guildChannels.rankId}>`,
-            });
+        if (interaction.channelId !== guildChannels.rankId) {
+            await interaction.reply({ content: `This command is only available in <#${guildChannels.rankId}>`, ephemeral: true });
             return true;
         }
-
+        return false;
+    } catch (error) {
+        console.error("Could not validate level channel:", error);
+        await interaction.reply({ content: "Channel settings could not be checked. Please try again later.", ephemeral: true });
+        return true;
     }
-
 };

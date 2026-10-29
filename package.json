@@ -1,26 +1,26 @@
 {
-	"name": "Riot's Wallet 2.0",
+	"name": "cfsbot",
 	"version": "2.0.5",
-	"description": "",
+	"description": "A Discord bot for server leveling, confessions, moderation, and interactive activities.",
 	"main": "./src/index.js",
 	"scripts": {
 		"start": "node ./src/index.js",
-		"dev": "nodemon ./src/index.js"
+		"dev": "nodemon ./src/index.js",
+		"test": "node --test"
 	},
 	"author": "Mangoexe",
 	"license": "ISC",
 	"dependencies": {
-		"@discordjs/builders": "^1.2.0",
-		"@discordjs/rest": "^1.2.0",
 		"canvacord": "^5.4.10",
 		"discord.js": "^14.5.0",
 		"djs-commander": "^0.0.50",
 		"dotenv": "^16.0.3",
-		"mongoose": "^6.6.3",
-		"mysql": "^2.18.1"
+		"mongoose": "^6.6.3"
 	},
 	"devDependencies": {
 		"nodemon": "^3.0.1"
 	},
-	"nodeVersion": "18.16.0"
+	"engines": {
+		"node": ">=18.16.0"
+	}
 }

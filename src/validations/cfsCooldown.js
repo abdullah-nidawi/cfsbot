@@ -1,29 +1,27 @@
 const UserSchema = require("../schemas/confessionsSchema");
 
-module.exports = async (interaction, commandObj, handler, client) => {
-    if (commandObj.name === "confess") {
+module.exports = async (interaction, commandObj) => {
+    if (!interaction.inGuild() || commandObj.name !== "confess") return false;
 
+    try {
+        const userProfile = await UserSchema.findOne({ userId: interaction.user.id });
+        const confessions = userProfile?.confessions || [];
+        const lastConfession = confessions[confessions.length - 1];
 
-        let userProfile = await UserSchema.findOne({
-            userId: interaction.member.id,
-        });
-
-        if (userProfile && (typeof userProfile.confessions !== 'undefined' && userProfile.confessions.length > 0)) {
-
-            const lastConfDate = userProfile.confessions.pop().confDate;
-
-            const currentDate = new Date();
-            const delta = Math.floor(currentDate.getTime() - lastConfDate.getTime()) / 60000;
-
-            if (delta <= 10) {
-                interaction.reply({
-                    content: `You can confess again in ${Math.ceil(10 - delta)} min.`,
-                    ephemeral: true,
+        if (lastConfession?.confDate) {
+            const elapsedMinutes = (Date.now() - lastConfession.confDate.getTime()) / 60_000;
+            if (elapsedMinutes < 10) {
+                await interaction.reply({
+                    content: `You can confess again in ${Math.ceil(10 - elapsedMinutes)} min.`,
+                    ephemeral: true
                 });
                 return true;
             }
         }
-
+        return false;
+    } catch (error) {
+        console.error("Could not check confession cooldown:", error);
+        await interaction.reply({ content: "The confession cooldown could not be checked. Please try again later.", ephemeral: true });
+        return true;
     }
-
 };
