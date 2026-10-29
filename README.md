@@ -75,10 +75,3 @@ XP and channel configuration are stored per server. Moderation actions store the
 
 Poll votes are held in memory while the bot is running, so restarting the bot closes active polls. Trivia answers are ephemeral and are not stored.
 
-## Tests
-
-Run the unit tests with:
-
-```sh
-npm test
-```
