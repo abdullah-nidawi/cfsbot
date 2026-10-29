@@ -19,10 +19,15 @@ const levelSchema = new Schema({
     xp: {
         type: Number,
         default: 0
+    },
+    hideFromLeaderboard: {
+        type: Boolean,
+        default: false
     }
 
 
 }, { timestamps: true });
 
+levelSchema.index({ guildId: 1, level: -1, xp: -1, userId: 1 });
 
 module.exports = model("levelSchema", levelSchema);

@@ -11,9 +11,13 @@ const channelSchema = new Schema({
     rankId: {
         type: String
     },
+    modLogId: {
+        type: String
+    },
 
 
 }, { timestamps: true });
 
+channelSchema.index({ guildId: 1 });
 
 module.exports = model("channelSchema", channelSchema);

@@ -1,84 +1,56 @@
-const { SlashCommandBuilder } = require("discord.js");
-const LevelSchema = require("../../schemas/levelSchema");
-const { levelUpChannel, x, y } = require("../../cfg.json");
-
-let levelXP = (lvl) => {
-    const r = Math.floor((lvl / x) ** y + 100);
-    return r;
-}
+const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
+const Level = require("../../schemas/levelSchema");
+const { levelForXp } = require("../../utils/leveling");
 
 module.exports = {
-
-    // deleted: true,
-
     data: new SlashCommandBuilder()
         .setName("givexp")
-        .setDescription("Give xp to someone")
-        .addUserOption((option) =>
-            option
-                .setName("user")
-                .setDescription("who do you wanna give xp to?")
-                .setRequired(true))
-        .addNumberOption((option) =>
-            option
-                .setName("xp")
-                .setDescription("how much xp?")
-                .setRequired(true)),
+        .setDescription("Give a positive whole number of XP to a member")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+        .addUserOption((option) => option
+            .setName("user")
+            .setDescription("Member who will receive XP")
+            .setRequired(true))
+        .addIntegerOption((option) => option
+            .setName("xp")
+            .setDescription("Amount of XP to give (1–100000)")
+            .setMinValue(1)
+            .setMaxValue(100000)
+            .setRequired(true)),
 
-    run: async ({ interaction, client }) => {
-        await interaction.deferReply();
+    run: async ({ interaction }) => {
+        await interaction.deferReply({ ephemeral: true });
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+            await interaction.editReply("You need Manage Server permission to give XP.");
+            return;
+        }
 
-        const member = interaction.options.getUser("user");
-
+        const member = interaction.options.getUser("user", true);
         if (member.bot) {
-            interaction.editReply({
-                content: `You cannot give XP to bots dude! <:kyAMK:1172286653725945968>`
-            });
+            await interaction.editReply("You cannot give XP to bots 💀");
             return;
         }
 
-        const given_xp = interaction.options.getNumber("xp");
-
-
-        let usr = await LevelSchema.findOne({
-            userId: member.id,
-            guildId: interaction.guild.id
-        });
-
-        if (!usr) {
-            interaction.editReply({
-                content: `<@${member.id}> has to chat a bit first 💀`
-            });
+        const user = await Level.findOne({ userId: member.id, guildId: interaction.guildId });
+        if (!user) {
+            await interaction.editReply("That member needs to chat and earn XP first.");
             return;
         }
 
-        usr.xp += given_xp;
+        const previousLevel = user.level;
+        const givenXp = interaction.options.getInteger("xp", true);
+        user.xp += givenXp;
+        user.level = levelForXp(user.xp);
+        await user.save();
 
-        let j = usr.level;
-        if (levelXP(usr.level) < usr.xp) {
-
-            do {
-                j++;
-            }
-            while (levelXP(j) < usr.xp);
-            usr.level = j;
-            interaction.channel.send({
-                content: `Congrats <@${member.id}>! You advanced to **level ${usr.level}** 🎉`
-            });
-            // client.channels.cache.get(levelUpChannel).send({
-            //     content: `Congrats <@${member.id}>! You advanced to **level ${usr.level}** 🎉`
-            // })
+        if (user.level > previousLevel) {
+            await interaction.channel.send({
+                content: `Congrats ${member.username}! You advanced to **level ${user.level}** 🎉`
+            }).catch((error) => console.error("Could not send level-up notice:", error));
         }
 
-        await usr.save();
-
-        interaction.editReply({
-            content: `Gave <@${member.id}> ${given_xp}XP!`
-        });
-
+        await interaction.editReply(`Gave ${member.username} ${givenXp} XP.`);
     },
-
-    devOnly: true,
 
     inGuild: true
 };

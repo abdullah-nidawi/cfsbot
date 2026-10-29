@@ -1,90 +1,43 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const Level = require("../../schemas/levelSchema");
 
-const levelSchema = require("../../schemas/levelSchema");
-
-let options = {
-    notation: "compact",
-    compactDisplay: "short",
-};
-function compact(number) {
-    const usformatter = Intl.NumberFormat("en-US", options);
-    return usformatter.format(number);
-}
+const compact = new Intl.NumberFormat("en-US", { notation: "compact", compactDisplay: "short" });
 
 module.exports = {
-
-    // deleted: true,
-
     data: new SlashCommandBuilder()
         .setName("leaderboard")
-        .setDescription("Server's leaderboard"),
+        .setDescription("Show the server's top members by level and XP"),
 
-    run: async ({ interaction, client }) => {
-
-
+    run: async ({ interaction }) => {
         await interaction.deferReply();
 
-        let guildName = interaction.guild.name;
-        guildName = guildName.charAt(0).toUpperCase() + guildName.slice(1);
+        const members = await Level.find({
+            guildId: interaction.guildId,
+            hideFromLeaderboard: { $ne: true },
+            xp: { $gt: 0 }
+        })
+            .sort({ level: -1, xp: -1, userId: 1 })
+            .limit(15)
+            .select("-_id userId level xp");
 
-        let allLevels = await levelSchema.find({ guildId: interaction.guild.id }).select('-_id userId level xp');
-
-        allLevels.sort((a, b) => {
-            if (a.level === b.level) {
-                return b.xp - a.xp;
-            } else {
-                return b.level - a.level;
-            }
+        const medals = ["🥇", "🥈", "🥉"];
+        const rows = members.map((member, index) => {
+            const position = index + 1;
+            const label = medals[index] || `#${position}`;
+            return `**${label}** <@${member.userId}> · Level ${member.level} · ${compact.format(member.xp)} XP`;
         });
 
-        let desc = "";
-        let title = "";
-        let users = [];
-
-        for (let i = 0; i < allLevels.length; i++) {
-            let pos = i + 1;
-
-            switch (pos) {
-                case 1:
-                    users.push(`**🥇** <@${allLevels[i].userId}> | **${compact(allLevels[i].xp)}**`);
-                    break;
-                case 2:
-                    users.push(`**🥈** <@${allLevels[i].userId}> | **${compact(allLevels[i].xp)}**`);
-                    break;
-                case 3:
-                    users.push(`**🥉** <@${allLevels[i].userId}> | **${compact(allLevels[i].xp)}**`);
-                    break;
-
-                default:
-                    users.push(`**#${pos}.** <@${allLevels[i].userId}> | **${compact(allLevels[i].xp)}**`);
-                    break;
-            }
-
-        }
-        const usersSliced = users.slice(0, 15);
-        title = `Top ${usersSliced.length} Members Ranked By XP`
-
-        desc = usersSliced.join("\n");
-
-        let lb = new EmbedBuilder()
-            .setAuthor({ name: guildName, iconURL: interaction.guild.iconURL() })
-            .setTitle(title)
-            .setDescription(desc)
-            .setFooter({
-                text: `</> with 💜 by 🥭`,
-            })
+        const guildIcon = interaction.guild.iconURL();
+        const embed = new EmbedBuilder()
+            .setAuthor({ name: interaction.guild.name, ...(guildIcon ? { iconURL: guildIcon } : {}) })
+            .setTitle("Server leaderboard")
+            .setDescription(rows.length ? rows.join("\n") : "No leaderboard entries yet.")
+            .setFooter({ text: "Use /leaderboard-privacy to hide or show your rank." })
             .setColor("DarkPurple")
             .setTimestamp();
 
-
-        interaction.editReply({
-            embeds: [lb],
-        });
-
-
+        await interaction.editReply({ embeds: [embed], allowedMentions: { parse: [] } });
     },
-
-    // devOnly: true,
 
     inGuild: true
 };
